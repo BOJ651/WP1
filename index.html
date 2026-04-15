@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carpooling Search — Поиск попутчиков</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #27ae60;      
+            --primary-hover: #219150;
+            --accent-color: #3498db;       
+            --accent-hover: #2980b9;
+            --danger-color: #e74c3c;       
+            --text-color: #2c3e50;
+            --bg-color: #f9f9f9;
+            --card-bg: #ffffff;
+            --border-radius: 8px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .form-section, .list-section {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .form-section { flex: 1; min-width: 300px; }
+        .list-section { flex: 2; min-width: 300px; }
+
+        h2 { margin-bottom: 20px; font-size: 22px; color: var(--text-color); }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus { outline: none; border-color: var(--accent-color); }
+        
+        .error { border-color: var(--danger-color) !important; background-color: #fff6f6; }
+        
+        .error-message {
+            color: var(--danger-color);
+            font-size: 12px;
+            margin-bottom: 12px;
+            display: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-size: 14px;
+        }
+
+        .btn-primary { background: var(--primary-color); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        
+        .btn-accent { background: var(--accent-color); color: white; }
+        .btn-accent:hover { background: var(--accent-hover); }
+        .btn-accent:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+        .btn-delete {
+            position: absolute; top: 10px; right: 10px;
+            background: transparent; color: #95a5a6;
+            width: auto; padding: 5px; font-size: 18px;
+        }
+        .btn-delete:hover { color: var(--danger-color); }
+        .trip-card {
+            border: 1px solid #eee;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: var(--border-radius);
+            position: relative;
+            background: #fff;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .trip-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+
+        .trip-route { font-size: 18px; font-weight: 700; margin-bottom: 5px; }
+        .trip-info { color: #7f8c8d; font-size: 14px; margin-bottom: 10px; }
+        .trip-passengers { 
+            font-size: 13px; color: var(--accent-color); 
+            margin-top: 10px; padding-top: 10px; border-top: 1px dashed #eee;
+        }
+        
+        .seats-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #e8f8f5;
+            color: var(--primary-color);
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .seats-badge.full { background: #fdedec; color: var(--danger-color); }
+
+        .empty-state { text-align: center; color: #95a5a6; padding: 40px 0; }
+
+        .modal {
+            display: none; position: fixed; z-index: 1000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal.active { display: flex; opacity: 1; }
+        
+        .modal-content {
+            background: white; padding: 30px;
+            border-radius: var(--border-radius);
+            width: 90%; max-width: 400px;
+            position: relative;
+            transform: translateY(-20px); transition: transform 0.3s;
+        }
+        .modal.active .modal-content { transform: translateY(0); }
+
+        .close-modal {
+            position: absolute; top: 15px; right: 20px;
+            font-size: 24px; cursor: pointer; color: #aaa;
+        }
+        .close-modal:hover { color: #333; }
+        @media (max-width: 768px) {
+            .container { flex-direction: column; }
+            .form-section, .list-section { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="form-section">
+        <h2>🚗 Предложить поездку</h2>
+        <form id="create-trip-form" onsubmit="event.preventDefault(); addTrip();">
+            <input type="text" id="from" placeholder="Откуда (Город)" autocomplete="off">
+            <div class="error-message" id="from-error">Введите корректный город (только буквы)</div>
+
+            <input type="text" id="to" placeholder="Куда (Город)" autocomplete="off">
+            <div class="error-message" id="to-error">Введите корректный город (только буквы)</div>
+
+            <input type="text" id="date" placeholder="Дата поездки" class="date-picker" readonly>
+            <div class="error-message" id="date-error">Выберите дату (не прошедшую)</div>
+
+            <input type="number" id="seats" placeholder="Свободных мест (1-10)" min="1" max="10">
+            <div class="error-message" id="seats-error">Укажите число от 1 до 10</div>
+
+            <button type="submit" class="btn-primary">Опубликовать поездку</button>
+        </form>
+    </div>
+
+    <div class="list-section">
+        <h2>📋 Активные поездки</h2>
+        <div id="trips-list">
+            
+        </div>
+    </div>
+</div>
+
+<div id="booking-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <h3 style="margin-bottom: 15px;">🙋‍♂️ Забронировать место</h3>
+        <p id="modal-trip-route" style="font-weight: bold; margin-bottom: 5px;"></p>
+        <p id="modal-trip-date" style="color: #7f8c8d; font-size: 14px; margin-bottom: 20px;"></p>
+        
+        <form id="booking-form" onsubmit="event.preventDefault(); confirmBooking();">
+            <input type="text" id="passenger-name" placeholder="Ваше имя" autocomplete="off">
+            <div class="error-message" id="name-error">Имя должно содержать только буквы (мин. 2)</div>
+
+            <input type="text" id="passenger-contact" placeholder="Telegram или Телефон" autocomplete="off">
+            <div class="error-message" id="contact-error">Введите корректный контакт</div>
+
+            <button type="submit" class="btn-accent">Подтвердить бронь</button>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ru.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        flatpickr('.date-picker', {
+            locale: 'ru',
+            dateFormat: 'd.m.Y',
+            minDate: 'today', 
+            allowInput: false
+        });
+        renderTrips();
+    });
+
+    let currentBookingId = null;
+
+    function getTrips() {
+        try {
+            return JSON.parse(localStorage.getItem('carpool_rides')) || [];
+        } catch (e) { return []; }
+    }
+
+    function saveTrips(trips) {
+        localStorage.setItem('carpool_rides', JSON.stringify(trips));
+    }
+
+
+    function showError(id, show) {
+        const el = document.getElementById(id);
+        const input = document.getElementById(id.replace('-error', ''));
+        if (el) el.style.display = show ? 'block' : 'none';
+        if (input) input.classList.toggle('error', show);
+    }
+
+    function isValidText(text) {
+        return /^[а-яА-Яa-zA-Z\s\-]{2,50}$/.test(text.trim());
+    }
+
+
+    function addTrip() {
+        const from = document.getElementById('from').value.trim();
+        const to = document.getElementById('to').value.trim();
+        const date = document.getElementById('date').value.trim();
+        const seats = parseInt(document.getElementById('seats').value);
+
+
+        ['from', 'to', 'date', 'seats'].forEach(id => showError(id + '-error', false));
+
+        let hasError = false;
+        if (!isValidText(from)) { showError('from-error', true); hasError = true; }
+        if (!isValidText(to)) { showError('to-error', true); hasError = true; }
+        if (!date) { showError('date-error', true); hasError = true; }
+        if (!seats || seats < 1 || seats > 10) { showError('seats-error', true); hasError = true; }
+
+        if (hasError) return;
+
+        const newTrip = {
+            id: Date.now(),
+            from: from.charAt(0).toUpperCase() + from.slice(1),
+            to: to.charAt(0).toUpperCase() + to.slice(1),
+            date: date,
+            totalSeats: seats,
+            passengers: [] 
+        };
+
+        const trips = getTrips();
+        trips.push(newTrip);
+        saveTrips(trips);
+        
+        document.getElementById('create-trip-form').reset();
+        renderTrips();
+    }
+
+    function renderTrips() {
+        const list = document.getElementById('trips-list');
+        list.innerHTML = '';
+        let trips = getTrips();
+
+        trips.sort((a, b) => {
+            const d1 = a.date.split('.').reverse().join('');
+            const d2 = b.date.split('.').reverse().join('');
+            return d1 - d2;
+        });
+
+        if (trips.length === 0) {
+            list.innerHTML = '<div class="empty-state">Пока нет активных поездок.<br>Будьте первым!</div>';
+            return;
+        }
+
+        trips.forEach(trip => {
+            const seatsLeft = trip.totalSeats - trip.passengers.length;
+            const isFull = seatsLeft <= 0;
+            
+            const passengersHtml = trip.passengers.length 
+                ? `<div class="trip-passengers"><strong>Пассажиры:</strong> ${trip.passengers.map(p => `${p.name} (${p.contact})`).join(', ')}</div>` 
+                : '';
+
+            const card = document.createElement('div');
+            card.className = 'trip-card';
+            card.innerHTML = `
+                <button class="btn-delete" onclick="deleteTrip(${trip.id})" title="Удалить">&times;</button>
+                <div class="trip-route">${trip.from} → ${trip.to}</div>
+                <div class="trip-info">
+                    📅 ${trip.date} &nbsp;|&nbsp; 
+                    <span class="seats-badge ${isFull ? 'full' : ''}">
+                        ${isFull ? 'Мест нет' : `Свободно: ${seatsLeft}`}
+                    </span>
+                </div>
+                ${passengersHtml}
+                <div style="margin-top: 15px;">
+                    <button class="btn-accent" ${isFull ? 'disabled' : ''} onclick="openBooking(${trip.id})">
+                        ${isFull ? 'Мест нет' : 'Забронировать место'}
+                    </button>
+                </div>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    function deleteTrip(id) {
+        if(confirm('Вы уверены, что хотите удалить эту поездку?')) {
+            let trips = getTrips().filter(t => t.id !== id);
+            saveTrips(trips);
+            renderTrips();
+        }
+    }
+
+    function openBooking(id) {
+        const trip = getTrips().find(t => t.id === id);
+        if (!trip) return;
+
+        currentBookingId = id;
+        document.getElementById('modal-trip-route').textContent = `${trip.from} → ${trip.to}`;
+        document.getElementById('modal-trip-date').textContent = `Дата: ${trip.date}`;
+        document.getElementById('booking-form').reset();
+        ['name', 'contact'].forEach(id => showError(id + '-error', false));
+        
+        document.getElementById('booking-modal').classList.add('active');
+    }
+
+    function closeModal() {
+        document.getElementById('booking-modal').classList.remove('active');
+        currentBookingId = null;
+    }
+
+    function confirmBooking() {
+        const name = document.getElementById('passenger-name').value.trim();
+        const contact = document.getElementById('passenger-contact').value.trim();
+
+        let hasError = false;
+        if (!isValidText(name)) { showError('name-error', true); hasError = true; }
+        if (contact.length < 5) { showError('contact-error', true); hasError = true; }
+
+        if (hasError) return;
+
+        const trips = getTrips();
+        const tripIndex = trips.findIndex(t => t.id === currentBookingId);
+        
+        if (tripIndex !== -1) {
+            trips[tripIndex].passengers.push({ name, contact });
+            saveTrips(trips);
+            closeModal();
+            renderTrips();
+            alert('✅ Место успешно забронировано! Контакты отправлены водителю.');
+        }
+    }
+    window.onclick = function(event) {
+        const modal = document.getElementById('booking-modal');
+        if (event.target == modal) closeModal();
+    }
+</script>
+</body>
+</html>
